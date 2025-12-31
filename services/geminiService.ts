@@ -2,20 +2,15 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { GeneratedScript } from '../types';
 
+// Function to generate closing scripts using Gemini API
 export async function generateScript(productTitle: string): Promise<GeneratedScript> {
-  // Safe retrieval of API key
-  let apiKey: string | undefined;
-  try {
-    apiKey = process.env.API_KEY;
-  } catch (e) {
-    apiKey = undefined;
-  }
-  
-  if (!apiKey) {
-    throw new Error("API_KEY tidak dijumpai. Sila pastikan anda telah menetapkan Environment Variable 'API_KEY' di dashboard Netlify anda.");
+  // Always use process.env.API_KEY directly.
+  if (!process.env.API_KEY) {
+    throw new Error("API Key tidak dijumpai. Sila pastikan anda telah memilih API Key melalui butang yang disediakan.");
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  // Create a new instance right before the call to ensure it uses the current key from process.env.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const prompt = `
     Generate a complete set of WhatsApp closing scripts for a product called "${productTitle}".
@@ -51,28 +46,21 @@ export async function generateScript(productTitle: string): Promise<GeneratedScr
           properties: {
             script: {
               type: Type.ARRAY,
-              description: "An array of script sections, following the required flow.",
+              description: "An array of script sections.",
               items: {
                 type: Type.OBJECT,
                 properties: {
                   title: {
                     type: Type.STRING,
-                    description: "The title of the script section (e.g., 'Intro')."
+                    description: "Title of the section."
                   },
                   messages: {
                     type: Type.ARRAY,
-                    description: "An array of messages or image placeholders.",
                     items: {
                       type: Type.OBJECT,
                       properties: {
-                        type: {
-                          type: Type.STRING,
-                          description: "Either 'text' or 'image'."
-                        },
-                        content: {
-                          type: Type.STRING,
-                          description: "The text message or image label."
-                        }
+                        type: { type: Type.STRING },
+                        content: { type: Type.STRING }
                       },
                       required: ['type', 'content'],
                       propertyOrdering: ['type', 'content']
@@ -90,25 +78,23 @@ export async function generateScript(productTitle: string): Promise<GeneratedScr
       }
     });
 
+    // Access the .text property directly to get the generated content
     const text = response.text;
-    if (!text) {
-      throw new Error("Tiada respon daripada AI. Sila cuba lagi.");
-    }
+    if (!text) throw new Error("Tiada respon daripada AI.");
 
     const jsonResponse = JSON.parse(text.trim());
     return jsonResponse.script as GeneratedScript;
   } catch (e: any) {
     console.error("AI Generation failed:", e);
     
-    // Handle specific API errors
     if (e.message?.includes('403') || e.message?.includes('API key')) {
-      throw new Error("API Key tidak sah atau telah tamat tempoh. Sila periksa tetapan API Key anda.");
+      throw new Error("API Key tidak sah atau tidak dibenarkan. Sila periksa tetapan API anda.");
     }
     
     if (e.message?.includes('429')) {
-      throw new Error("Terlalu banyak permintaan. Sila tunggu sebentar dan cuba lagi.");
+      throw new Error("Had penggunaan dicapai. Sila tunggu seminit dan cuba lagi.");
     }
 
-    throw new Error(e.message || "Gagal menjana skrip. Sila pastikan sambungan internet anda stabil.");
+    throw new Error(e.message || "Gagal menjana skrip. Sila cuba lagi sebentar.");
   }
 }
