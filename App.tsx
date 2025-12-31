@@ -27,9 +27,10 @@ const App: React.FC = () => {
     try {
       const result = await generateScript(productTitle);
       setScript(result);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error generating script:', err);
-      setError('Maaf, ada masalah teknikal semasa menjana skrip. Sila cuba lagi.');
+      // Display the specific error message to help troubleshooting
+      setError(err.message || 'Maaf, ada masalah teknikal semasa menjana skrip. Sila cuba lagi.');
     } finally {
       setIsLoading(false);
     }

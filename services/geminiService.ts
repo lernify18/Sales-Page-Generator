@@ -3,11 +3,16 @@ import { GoogleGenAI, Type } from "@google/genai";
 import type { GeneratedScript } from '../types';
 
 export async function generateScript(productTitle: string): Promise<GeneratedScript> {
-  // Ensure we have an API key at runtime, not at module load time
-  const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
+  // Safe retrieval of API key
+  let apiKey: string | undefined;
+  try {
+    apiKey = process.env.API_KEY;
+  } catch (e) {
+    apiKey = undefined;
+  }
   
   if (!apiKey) {
-    throw new Error("API_KEY environment variable is not set. Please check your environment configuration.");
+    throw new Error("API_KEY tidak dijumpai. Sila pastikan anda telah menetapkan Environment Variable 'API_KEY' di dashboard Netlify anda.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -19,7 +24,20 @@ export async function generateScript(productTitle: string): Promise<GeneratedScr
     Use ✅ emojis for lists of features and offers.
     Include image placeholders with specific labels: "Product Poster", "Testimonial Proof", "Shipping Proof", "Grand Promo Poster".
     Each message must be ready to be copied and pasted into WhatsApp. Ensure the output is a valid JSON object matching the provided schema.
-    The flow must be: Intro, Testimonial (Round 1), Suggest Solution, Testimonial (Round 2), Product Info, Harga Offer (Main Offer), Upsell Package, Bank Account Details, Proof of Posting, Follow-Up Scripts (Day 1–5 Softselling), 10 Testimonial Follow-Ups, 10 Grand Promo Follow-Ups.
+    
+    The flow MUST include: 
+    1. Intro
+    2. Testimonial (Round 1)
+    3. Suggest Solution
+    4. Testimonial (Round 2)
+    5. Product Info
+    6. Harga Offer (Main Offer)
+    7. Upsell Package
+    8. Bank Account Details
+    9. Proof of Posting
+    10. Follow-Up Scripts (Day 1–5 Softselling)
+    11. 10 Testimonial Follow-Ups
+    12. 10 Grand Promo Follow-Ups
   `;
 
   try {
@@ -39,41 +57,58 @@ export async function generateScript(productTitle: string): Promise<GeneratedScr
                 properties: {
                   title: {
                     type: Type.STRING,
-                    description: "The title of the script section (e.g., 'Intro', 'Testimonial (Round 1)')."
+                    description: "The title of the script section (e.g., 'Intro')."
                   },
                   messages: {
                     type: Type.ARRAY,
-                    description: "An array of messages or image placeholders for this section.",
+                    description: "An array of messages or image placeholders.",
                     items: {
                       type: Type.OBJECT,
                       properties: {
                         type: {
                           type: Type.STRING,
-                          description: "Either 'text' for a message or 'image' for a placeholder."
+                          description: "Either 'text' or 'image'."
                         },
                         content: {
                           type: Type.STRING,
-                          description: "The text of the message or the label for the image placeholder (e.g., 'Product Poster')."
+                          description: "The text message or image label."
                         }
                       },
-                      required: ['type', 'content']
+                      required: ['type', 'content'],
+                      propertyOrdering: ['type', 'content']
                     }
                   }
                 },
-                required: ['title', 'messages']
+                required: ['title', 'messages'],
+                propertyOrdering: ['title', 'messages']
               }
             }
           },
-          required: ['script']
+          required: ['script'],
+          propertyOrdering: ['script']
         }
       }
     });
 
-    const jsonText = response.text.trim();
-    const jsonResponse = JSON.parse(jsonText);
+    const text = response.text;
+    if (!text) {
+      throw new Error("Tiada respon daripada AI. Sila cuba lagi.");
+    }
+
+    const jsonResponse = JSON.parse(text.trim());
     return jsonResponse.script as GeneratedScript;
   } catch (e: any) {
     console.error("AI Generation failed:", e);
-    throw new Error(e.message || "Gagal menjana skrip. Sila pastikan API Key anda aktif.");
+    
+    // Handle specific API errors
+    if (e.message?.includes('403') || e.message?.includes('API key')) {
+      throw new Error("API Key tidak sah atau telah tamat tempoh. Sila periksa tetapan API Key anda.");
+    }
+    
+    if (e.message?.includes('429')) {
+      throw new Error("Terlalu banyak permintaan. Sila tunggu sebentar dan cuba lagi.");
+    }
+
+    throw new Error(e.message || "Gagal menjana skrip. Sila pastikan sambungan internet anda stabil.");
   }
 }
